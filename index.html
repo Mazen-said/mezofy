@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MZ-Lyrics</title>
+
+  <!-- Arabic-friendly fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;800&family=Tajawal:wght@400;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root{
+      --bg1:#0f1724;
+      --card-bg:rgba(255,255,255,0.03);
+      --accent-1:#7b61ff;
+      --accent-2:#00d4ff;
+      --accent-3:#ff6b6b;
+      --glass-border:rgba(255,255,255,0.06);
+      --lyric-color:#ff6b6b;
+      --lyric-font:'Cairo', sans-serif;
+    }
+
+    html,body{height:100%;}
+    body{
+      margin:0;
+      font-family:var(--lyric-font), system-ui, sans-serif;
+      background:linear-gradient(120deg,var(--bg1), #021026 40%, #08111d 60%);
+      display:flex; align-items:center; justify-content:center;
+      overflow:hidden;
+    }
+
+    .bg-shape{
+      position:fixed; inset:-20% -10% auto auto;
+      width:140vmax; height:140vmax;
+      pointer-events:none; z-index:0;
+      background: conic-gradient(from 120deg at 50% 50%, var(--accent-1), var(--accent-2), var(--accent-3), var(--accent-1));
+      opacity:0.08; filter: blur(80px);
+      animation: rotate 20s linear infinite;
+    }
+    @keyframes rotate{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+
+    .card{
+      position:relative; z-index:2;
+      width:92%; max-width:920px; min-height:420px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.03), transparent);
+      border-radius:16px; padding:22px;
+      border:1px solid var(--glass-border);
+      box-shadow:0 10px 30px rgba(2,6,23,.7);
+      backdrop-filter:blur(8px);
+      display:flex; flex-direction:column; gap:18px;
+      transition:0.4s;
+    }
+
+    textarea{
+      width:100%; min-height:160px; resize:vertical;
+      border-radius:12px; padding:14px;
+      background:var(--card-bg);
+      border:1px solid rgba(255,255,255,0.05);
+      color:#e7f1ff; font-size:16px; outline:none;
+      font-family:var(--lyric-font);
+    }
+
+    .start-btn{
+      appearance:none; border:none;
+      padding:12px 20px; border-radius:12px;
+      font-weight:700; cursor:pointer;
+      background:linear-gradient(90deg,var(--accent-1),var(--accent-2));
+      color:white; font-size:16px;
+      box-shadow:0 6px 26px rgba(11,19,42,0.6);
+      transition:0.18s;
+    }
+    .start-btn:active{transform:scale(0.96)}
+
+    #lyricsView{
+      position:fixed; inset:0;
+      display:flex; align-items:center; justify-content:center;
+      z-index:10;
+      background:rgba(0,0,0,0.7);
+      opacity:0; visibility:hidden;
+      transition:opacity .5s;
+      padding:40px 20px 80px 20px; /* extra bottom space to prevent hidden text */
+    }
+    #lyricsView.show{opacity:1; visibility:visible}
+
+    .lyric-line{
+      font-weight:800; text-align:center;
+      line-height:1.1;
+      max-width:95%; margin:auto;
+      opacity:0; transform:translateY(20px) scale(0.95);
+      transition:0.5s;
+      background:linear-gradient(90deg,var(--accent-3),var(--accent-1),var(--accent-2));
+      background-size:200% 200%;
+      -webkit-background-clip:text;
+      background-clip:text; color:transparent;
+      animation: gradient-move 6s linear infinite;
+      filter: drop-shadow(0 4px 14px rgba(0,0,0,0.5));
+      font-family:var(--lyric-font);
+    }
+
+    @keyframes gradient-move{
+      0%{background-position:0% 50%}
+      50%{background-position:100% 50%}
+      100%{background-position:0% 50%}
+    }
+
+    .big{font-size:8vw;}
+    @media(max-width:600px){.big{font-size:11vw;}}
+
+  </style>
+</head>
+<body>
+  <div class="bg-shape"></div>
+
+  <div class="card">
+    <h2 style="color:white;margin:0;">MZ-Lyrics</h2>
+
+    <textarea id="lyricsInput" placeholder="اكتب الكلمات هنا (عربي أو إنجليزي)"></textarea>
+
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+      <label style="color:white;">Speed (sec):</label>
+      <input id="speed" type="number" min="0.2" step="0.1" value="1.5"
+             style="width:90px; padding:8px; border-radius:8px; background:transparent; color:white; border:1px solid rgba(255,255,255,0.2);">
+
+      <label style="color:white;">Audio:</label>
+      <input id="audioFile" type="file" accept="audio/*"
+             style="color:white; border:1px dashed rgba(255,255,255,0.2); padding:8px; border-radius:8px;">
+
+      <button id="startBtn" class="start-btn">Start </button>
+    </div>
+  </div>
+
+  <!-- full lyrics view -->
+  <div id="lyricsView">
+    <div id="lyricContainer" style="width:100%; text-align:center;"></div>
+
+    <button id="pauseBtn"
+            class="start-btn"
+            style="position:fixed; bottom:30px; left:50%; transform:translateX(-50%);
+            background:linear-gradient(90deg,var(--accent-2),var(--accent-3));">
+      Pause
+    </button>
+  </div>
+
+  <audio id="audioPlayer"></audio>
+
+<script>
+(() => {
+  const startBtn = document.getElementById("startBtn");
+  const pauseBtn = document.getElementById("pauseBtn");
+  const lyricsInput = document.getElementById("lyricsInput");
+  const speedInput = document.getElementById("speed");
+  const audioFile = document.getElementById("audioFile");
+  const audio = document.getElementById("audioPlayer");
+  const lyricsView = document.getElementById("lyricsView");
+  const lyricContainer = document.getElementById("lyricContainer");
+
+  let lines = [];
+  let index = 0;
+  let timer = null;
+
+  function isArabic(text){ return /[؀-ۿ]/.test(text); }
+
+  function playSafe(){ if(!audio.src) return; audio.play().catch(() => {}); }
+
+  startBtn.onclick = () => {
+    const raw = lyricsInput.value.trim();
+    if(!raw){ alert("Enter lyrics first!"); return; }
+
+    lines = raw.split(/\n+/).map(l => l.trim()).filter(Boolean);
+    index = 0;
+
+    if(isArabic(raw)){ document.body.dir="rtl"; lyricContainer.dir="rtl"; }
+    else{ document.body.dir="ltr"; lyricContainer.dir="ltr"; }
+
+    const file = audioFile.files[0];
+    if(file){ audio.src = URL.createObjectURL(file); playSafe(); }
+
+    document.querySelector(".card").style.display = "none";
+    lyricsView.classList.add("show");
+    startLoop();
+  };
+
+  pauseBtn.onclick = () => {
+    if(audio.paused){ audio.play(); pauseBtn.textContent="Pause"; }
+    else{ audio.pause(); pauseBtn.textContent="Play"; }
+  };
+
+  function startLoop(){
+    showLine(index);
+    const delay = Math.max(200, parseFloat(speedInput.value||1.5)*1000);
+    timer = setTimeout(nextLine, delay);
+  }
+
+  function nextLine(){ index++; if(index>=lines.length){ if(!audio.paused) audio.pause(); return; } startLoop(); showLine(index); }
+
+  function showLine(i){
+    const t = lines[i];
+    lyricContainer.innerHTML = "";
+    const el = document.createElement("div");
+    el.className = "lyric-line big";
+    el.textContent = t;
+    lyricContainer.appendChild(el);
+    requestAnimationFrame(()=>{ el.style.opacity="1"; el.style.transform="translateY(0) scale(1)"; });
+  }
+
+  window.addEventListener("keydown", e => {
+    if(e.code==="Space"){
+      e.preventDefault();
+      clearTimeout(timer);
+      index = Math.min(index+1, lines.length-1);
+      showLine(index);
+      startLoop();
+    }
+  });
+})();
+</script>
+
+</body>
+</html>
