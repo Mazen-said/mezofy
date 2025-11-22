@@ -215,6 +215,17 @@ textarea{
     }
   });
 })();
+window.addEventListener("keydown", e => {
+  // Only trigger space to advance lyrics if textarea is NOT focused
+  if(e.code === "Space" && document.activeElement !== lyricsInput){
+    e.preventDefault(); 
+    clearTimeout(timer); 
+    index = Math.min(index + 1, lines.length - 1); 
+    showLine(index); 
+    startLoop();
+  }
+});
+
 </script>
 </body>
 </html>
